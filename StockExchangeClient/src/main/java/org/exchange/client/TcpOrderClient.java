@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.util.Scanner;
 
 public class TcpOrderClient implements AutoCloseable {
     private final String host;
@@ -64,15 +65,44 @@ public class TcpOrderClient implements AutoCloseable {
     public static void main(String[] args) {
         try (TcpOrderClient apiClient = new TcpOrderClient("localhost", 8080)) {
             apiClient.connect();
+            // Start listening for commands from Electron/Stdin
+            apiClient.startCommandListener();
 
-            System.out.println("Sending 10,000 test orders...");
-            for (int i = 0; i < 10000; i++) {
-                apiClient.sendOrder(i, 10, 100 + i, true);
-            }
-            System.out.println("Orders sent successfully.");
-
-        } catch (IOException e) {
-            System.err.println("Failed to connect or send orders: " + e.getMessage());
+            // Keep the main thread alive while the listener thread runs
+            Thread.currentThread().join();
+        } catch (Exception e) {
+            System.err.println("Client error: " + e.getMessage());
         }
+    }
+
+    public void startCommandListener() {
+        Thread listenerThread = new Thread(() -> {
+            System.out.println("Java Client: Listening for commands on stdin...");
+            try (Scanner scanner = new Scanner(System.in)) {
+                while (!Thread.currentThread().isInterrupted() && scanner.hasNextLine()) {
+                    String line = scanner.nextLine();
+                    if (line.isEmpty()) continue;
+
+                    try {
+                        // Expected format: SEND_ORDER,orderId,qty,price,isBuy
+                        String[] parts = line.split(",");
+                        if ("SEND_ORDER".equals(parts[0]) && parts.length == 5) {
+                            long id = Long.parseLong(parts[1]);
+                            long qty = Long.parseLong(parts[2]);
+                            long price = Long.parseLong(parts[3]);
+                            boolean isBuy = Boolean.parseBoolean(parts[4]);
+
+                            sendOrder(id, qty, price, isBuy);
+                            System.out.println("Sent order: " + id);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Failed to parse command: " + line + " | Error: " + e.getMessage());
+                    }
+                }
+            }
+        }, "ElectronCommandListener");
+
+        listenerThread.setDaemon(true);
+        listenerThread.start();
     }
 }
