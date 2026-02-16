@@ -39,19 +39,19 @@ public class PriceMap {
         };
     }
 
-    public Runnable returnMarketPrice() {
-        return () -> {
-            try {
-                System.out.println("Market Data Provider started...");
-                while (true) {
-                    Thread.sleep(1000);
-                    System.out.println("Market Data Provider: " + lastProcessedPrice);
-                }
-            } catch (Throwable t) {
-                System.err.println("Market Data Provider CRASHED:");
-            }
-        };
-    }
+//    public Runnable returnMarketPrice() {
+//        return () -> {
+//            try {
+//                System.out.println("Market Data Provider started...");
+//                while (true) {
+//                    Thread.sleep(1000);
+//                    System.out.println("Market Data Provider: " + lastProcessedPrice);
+//                }
+//            } catch (Throwable t) {
+//                System.err.println("Market Data Provider CRASHED:");
+//            }
+//        };
+//    }
 
     public void processOrder(Order incomingOrder, boolean isBuy) {
         long remainingQty = incomingOrder.qty;

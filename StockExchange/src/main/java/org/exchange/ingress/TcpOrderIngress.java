@@ -46,8 +46,8 @@ public class TcpOrderIngress implements Runnable{
             Thread matchingEngineThread = new Thread(priceMap.run(ringBuffer));
             matchingEngineThread.start();
 
-            Thread marketDataProvider = new Thread(priceMap.returnMarketPrice());
-            marketDataProvider.start();
+//            Thread marketDataProvider = new Thread(priceMap.returnMarketPrice());
+//            marketDataProvider.start();
 
             selector = Selector.open();
 
