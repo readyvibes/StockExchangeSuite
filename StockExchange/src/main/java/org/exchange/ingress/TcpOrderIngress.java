@@ -89,8 +89,8 @@ public class TcpOrderIngress implements Runnable{
 
         buffer.flip();
         // Assume a simple binary protocol:
-        // Long (8) orderId, Long (8) qty, Long (8) price, Byte (1) isBuy
-        while (buffer.remaining() >= 25) {
+        // Long (8) qty, Long (8) price, Byte (1) isBuy
+        while (buffer.remaining() >= 17) {
             long qty = buffer.getLong();
             long price = buffer.getLong();
             boolean isBuy = buffer.get() == 1;

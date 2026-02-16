@@ -85,7 +85,7 @@ public class TcpOrderClient implements AutoCloseable {
                     try {
                         // Expected format: SEND_ORDER,orderId,qty,price,isBuy
                         String[] parts = line.split(",");
-                        if ("SEND_ORDER".equals(parts[0]) && parts.length == 5) {
+                        if ("SEND_ORDER".equals(parts[0]) && parts.length == 4) {
                             long qty = Long.parseLong(parts[1]);
                             long price = Long.parseLong(parts[2]);
                             boolean isBuy = Boolean.parseBoolean(parts[3]);
