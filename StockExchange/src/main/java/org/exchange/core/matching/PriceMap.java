@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectRBTreeMap;
 import org.exchange.core.sequencer.ringbuffer.RingBuffer;
 import org.exchange.core.util.Order;
 
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.LongAdder;
 
 public class PriceMap {
@@ -15,6 +16,8 @@ public class PriceMap {
     // Cached "Top of Book" values
     private long bestBidPrice = 0;
     private long bestAskPrice = Long.MAX_VALUE;
+
+    public volatile long lastProcessedPrice;
 
     public PriceMap(LongAdder processedCount) {
         this.processedCount = processedCount;
@@ -32,6 +35,20 @@ public class PriceMap {
             } catch (Throwable t) {
                 System.err.println("Matching Engine CRASHED:");
                 t.printStackTrace();
+            }
+        };
+    }
+
+    public Runnable returnMarketPrice() {
+        return () -> {
+            try {
+                System.out.println("Market Data Provider started...");
+                while (true) {
+                    Thread.sleep(1000);
+                    System.out.println("Market Data Provider: " + lastProcessedPrice);
+                }
+            } catch (Throwable t) {
+                System.err.println("Market Data Provider CRASHED:");
             }
         };
     }
@@ -68,6 +85,8 @@ public class PriceMap {
                 }
                 continue;
             }
+
+            lastProcessedPrice = makerOrder.price;
 
             long matchQty = Math.min(remainingQty, makerOrder.qty);
 

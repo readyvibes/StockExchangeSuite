@@ -1,6 +1,8 @@
 package org.exchange.ingress;
 
+import org.exchange.core.matching.PriceMap;
 import org.exchange.core.sequencer.ringbuffer.MultiProducerRingBuffer;
+import org.exchange.monitor.ExchangeMonitor;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -9,40 +11,60 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.LongAdder;
 
 public class TcpOrderIngress implements Runnable{
     private final MultiProducerRingBuffer ringBuffer;
-    private final int port;
+    private final PriceMap priceMap;
+    private final ExchangeMonitor exchangeMonitor;
+    private static final LongAdder processedCount = new LongAdder();
+    private final int orderPort = 9090;
+    private final int pricePort = 9091;
     private final ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+    private final ByteBuffer priceOutputBuffer = ByteBuffer.allocateDirect(8);
     private Selector selector;
-    private ServerSocketChannel serverChannel;
+    private ServerSocketChannel orderServerChannel;
+    private ServerSocketChannel priceServerChannel;
 
+    private final Set<SocketChannel> priceSubscribers = ConcurrentHashMap.newKeySet();
 
-    public TcpOrderIngress(int port, MultiProducerRingBuffer ringBuffer) {
-        this.ringBuffer = ringBuffer;
-        this.port = port;
+    public TcpOrderIngress() {
+        ringBuffer = new MultiProducerRingBuffer(1);
+        priceMap = new PriceMap(processedCount);
+        exchangeMonitor = new ExchangeMonitor();
     }
 
     public void start() {
         try {
-            // 1. Opens the 'Selector,' which acts as a multiplexer to monitor multiple connections on a single thread.
+            Thread monitorThread = new Thread(exchangeMonitor.monitor(processedCount));
+            monitorThread.start();
+
+            Thread matchingEngineThread = new Thread(priceMap.run(ringBuffer));
+            matchingEngineThread.start();
+
+            Thread marketDataProvider = new Thread(priceMap.returnMarketPrice());
+            marketDataProvider.start();
+
             selector = Selector.open();
 
-            // 2. Creates the initial 'ServerSocketChannel' that will listen for new incoming trading connections.
-            serverChannel = ServerSocketChannel.open();
+            orderServerChannel = ServerSocketChannel.open();
+            orderServerChannel.bind(new InetSocketAddress(orderPort));
+            orderServerChannel.configureBlocking(false);
+            orderServerChannel.register(selector, SelectionKey.OP_ACCEPT);
 
-            // 3. Binds the channel to a specific IP and port (e.g., 9090) to start listening for client traffic.
-            serverChannel.bind(new InetSocketAddress(port));
-
-            // 4. Sets the channel to non-blocking mode so the thread doesn't hang while waiting for a client to connect.
-            serverChannel.configureBlocking(false);
-
-            // 5. Registers this channel with the selector to notify the 'run' loop only when a new client wants to 'ACCEPT'.
-            serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+            priceServerChannel = ServerSocketChannel.open();
+            priceServerChannel.bind(new InetSocketAddress(pricePort));
+            priceServerChannel.configureBlocking(false);
+            priceServerChannel.register(selector, SelectionKey.OP_ACCEPT);
 
             new Thread(this, "Ingress-Gateway-Thread").start(); // Calls run method because "this"
-            System.out.println("Ingress Gateway listening on port " + port);
+            System.out.println("Order Ingress Gateway listening on port " + orderPort);
+            System.out.println("Price Ingress Gateway listening on port " + pricePort);
+
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -59,8 +81,8 @@ public class TcpOrderIngress implements Runnable{
                     SelectionKey key = keys.next();
                     keys.remove();
 
-                    if (key.isAcceptable()) {
-                        handleAccept();
+                    if (key.isValid() && key.isAcceptable()) {
+                        handleAccept(key);
                     } else if (key.isReadable()) {
                         handleRead(key);
                     }
@@ -71,15 +93,54 @@ public class TcpOrderIngress implements Runnable{
         }
     }
 
-    private void handleAccept() throws IOException {
-        SocketChannel client = serverChannel.accept();
-        client.configureBlocking(false);
-        client.register(selector, SelectionKey.OP_READ);
-        System.out.println("Client connected: " + client.getRemoteAddress());
+
+
+    private void handleAccept(SelectionKey selectionKey) throws IOException {
+        ServerSocketChannel server = (ServerSocketChannel) selectionKey.channel();
+        SocketChannel client = server.accept();
+
+        if (client != null) {
+            client.configureBlocking(false);
+
+            client.register(selector, SelectionKey.OP_READ);
+            if (server == priceServerChannel) {
+                System.out.println("Price Query Client connected: " + client.getRemoteAddress());
+            } else {
+                System.out.println("Order Client connected: " + client.getRemoteAddress());
+            }
+        }
     }
 
     private void handleRead(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
+
+        // Determine if this is a price query or an order
+        if (client.getLocalAddress().toString().contains(String.valueOf(pricePort))) {
+            handlePriceRequest(client);
+        } else {
+            handleOrderRequest(client);
+        }
+    }
+
+    private void handlePriceRequest(SocketChannel client) throws IOException {
+        ByteBuffer pingBuffer = ByteBuffer.allocate(1);
+        int read = client.read(pingBuffer);
+
+        if (read == -1) {
+            client.close();
+            return;
+        }
+
+        if (read > 0) {
+            // User sent a ping, respond with the latest price
+            priceOutputBuffer.clear();
+            priceOutputBuffer.putLong(priceMap.lastProcessedPrice);
+            priceOutputBuffer.flip();
+            client.write(priceOutputBuffer);
+        }
+    }
+
+    private void handleOrderRequest(SocketChannel client) throws IOException {
         int bytesRead = client.read(buffer);
 
         if (bytesRead == -1) {
