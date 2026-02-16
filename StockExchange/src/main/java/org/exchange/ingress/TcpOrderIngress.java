@@ -80,7 +80,6 @@ public class TcpOrderIngress implements Runnable{
 
     private void handleRead(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
-        buffer.clear();
         int bytesRead = client.read(buffer);
 
         if (bytesRead == -1) {
@@ -100,5 +99,7 @@ public class TcpOrderIngress implements Runnable{
             // Push directly to the high-performance ring buffer
             ringBuffer.addOrder(id, qty, price, isBuy);
         }
+
+        buffer.compact();
     }
 }

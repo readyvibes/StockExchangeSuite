@@ -5,15 +5,20 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectRBTreeMap;
 import org.exchange.core.sequencer.ringbuffer.RingBuffer;
 import org.exchange.core.util.Order;
 
+import java.util.concurrent.atomic.LongAdder;
+
 public class PriceMap {
     private final Long2ObjectRBTreeMap<PriceLevel> bids = new Long2ObjectRBTreeMap<>( (a, b) -> Long.compare(b, a) ); // Descending
     private final Long2ObjectRBTreeMap<PriceLevel> asks = new Long2ObjectRBTreeMap<>( Long::compare ); // Ascending
+    private final LongAdder processedCount;
 
     // Cached "Top of Book" values
     private long bestBidPrice = 0;
     private long bestAskPrice = Long.MAX_VALUE;
 
-    public PriceMap() {}
+    public PriceMap(LongAdder processedCount) {
+        this.processedCount = processedCount;
+    }
 
     public Runnable run(RingBuffer ringBuffer) {
         return () -> {
@@ -22,7 +27,7 @@ public class PriceMap {
                 while (true) {
                     Order incomingOrder = ringBuffer.readOrder(0);
                     processOrder(incomingOrder, incomingOrder.isBuy);
-
+                    processedCount.increment();
                 }
             } catch (Throwable t) {
                 System.err.println("Matching Engine CRASHED:");

@@ -13,7 +13,7 @@ public class Main {
 
     public static void main(String[] args) {
         MultiProducerRingBuffer ringBuffer = new MultiProducerRingBuffer(1);
-        PriceMap matchingEngine = new PriceMap();
+        PriceMap matchingEngine = new PriceMap(processedCount);
         ExchangeMonitor exchangeMonitor = new ExchangeMonitor();
 
         Thread monitorThread = new Thread(exchangeMonitor.monitor(processedCount));
