@@ -1,6 +1,8 @@
 package org.exchange.client;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
@@ -76,29 +78,32 @@ public class TcpOrderClient implements AutoCloseable {
 
     public void startCommandListener() {
         Thread listenerThread = new Thread(() -> {
-            System.out.println("Java Client: Listening for commands on stdin...");
-            try (Scanner scanner = new Scanner(System.in)) {
-                while (!Thread.currentThread().isInterrupted() && scanner.hasNextLine()) {
-                    String line = scanner.nextLine();
-                    if (line.isEmpty()) continue;
-
-                    try {
-                        // Expected format: SEND_ORDER,orderId,qty,price,isBuy
-                        String[] parts = line.split(",");
-                        if ("SEND_ORDER".equals(parts[0]) && parts.length == 4) {
-                            long qty = Long.parseLong(parts[1]);
-                            long price = Long.parseLong(parts[2]);
-                            boolean isBuy = Boolean.parseBoolean(parts[3]);
-
-                            sendOrder(qty, price, isBuy);
-                            System.out.println("Sent order");
-                        }
-                    } catch (Exception e) {
-                        System.err.println("Failed to parse command: " + line + " | Error: " + e.getMessage());
+            System.out.println("Java Client: Listening for BINARY commands on stdin...");
+            try {
+                java.io.InputStream in = System.in;
+                byte[] messageBuffer = new byte[17]; // 8 (qty) + 8 (price) + 1 (isBuy)
+                
+                while (!Thread.currentThread().isInterrupted()) {
+                    int bytesRead = 0;
+                    // Ensure we read a full 17-byte message
+                    while (bytesRead < 17) {
+                        int result = in.read(messageBuffer, bytesRead, 17 - bytesRead);
+                        if (result == -1) return; // Stream closed
+                        bytesRead += result;
                     }
+
+                    // Wrap the bytes into a ByteBuffer to extract longs without string parsing
+                    ByteBuffer bb = ByteBuffer.wrap(messageBuffer);
+                    long qty = bb.getLong();
+                    long price = bb.getLong();
+                    boolean isBuy = bb.get() == 1;
+
+                    sendOrder(qty, price, isBuy);
                 }
+            } catch (IOException e) {
+                System.err.println("Binary command listener error: " + e.getMessage());
             }
-        }, "ElectronCommandListener");
+        }, "ElectronBinaryListener");
 
         listenerThread.setDaemon(true);
         listenerThread.start();
