@@ -9,8 +9,6 @@ import java.util.concurrent.atomic.LongAdder;
 
 public class Main {
     // High-performance counter for metrics
-
-
     public static void main(String[] args) {
         TcpOrderIngress tcpOrderIngress = new TcpOrderIngress();
         tcpOrderIngress.start();
