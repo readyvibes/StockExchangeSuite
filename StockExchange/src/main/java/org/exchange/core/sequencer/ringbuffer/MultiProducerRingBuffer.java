@@ -14,6 +14,8 @@ public class MultiProducerRingBuffer implements RingBuffer{
 
     private final Sequence[] availableBuffer;
 
+    private final AtomicLong idGenerator = new AtomicLong(1);
+
     private final int totalConsumers;
 
     public MultiProducerRingBuffer(int totalConsumers) {
@@ -59,8 +61,9 @@ public class MultiProducerRingBuffer implements RingBuffer{
     }
 
 
-    public void addOrder(long orderId, long qty, long price, boolean isBuy) {
+    public void addOrder(long qty, long price, boolean isBuy) {
         long currentOffset = producerOffset.getAndIncrement();
+        long generatedId = idGenerator.getAndIncrement();
         int index = (int) (currentOffset & (ringBufferLength - 1));
 
         long currMinConsumerOffset = minConsumerOffset.get();
@@ -72,7 +75,7 @@ public class MultiProducerRingBuffer implements RingBuffer{
             }
         }
 
-        ringBuffer[index].update(orderId, qty, price, isBuy);
+        ringBuffer[index].update(generatedId, qty, price, isBuy);
         availableBuffer[index].set(currentOffset);
     }
 

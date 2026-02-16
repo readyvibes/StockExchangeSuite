@@ -91,13 +91,12 @@ public class TcpOrderIngress implements Runnable{
         // Assume a simple binary protocol:
         // Long (8) orderId, Long (8) qty, Long (8) price, Byte (1) isBuy
         while (buffer.remaining() >= 25) {
-            long id = buffer.getLong();
             long qty = buffer.getLong();
             long price = buffer.getLong();
             boolean isBuy = buffer.get() == 1;
 
             // Push directly to the high-performance ring buffer
-            ringBuffer.addOrder(id, qty, price, isBuy);
+            ringBuffer.addOrder(qty, price, isBuy);
         }
 
         buffer.compact();

@@ -51,7 +51,7 @@ public class MultiProducerRingBufferTest {
                     startLatch.await();
                     for (int j = 0; j < ITEMS_PER_PRODUCER; j++) {
                         // Each producer sends an order with qty 1
-                        ringBuffer.addOrder(1, 1, 100, true);
+                        ringBuffer.addOrder(1, 100, true);
                     }
                 } catch (Exception e) {
                     error[0] = e;
@@ -94,7 +94,7 @@ public class MultiProducerRingBufferTest {
         }).start();
 
         for (int i = 0; i < ITERATIONS; i++) {
-            rb.addOrder(i, 1, 100, true);
+            rb.addOrder(1, 100, true);
         }
 
         latch.await(); // Wait for consumer to finish

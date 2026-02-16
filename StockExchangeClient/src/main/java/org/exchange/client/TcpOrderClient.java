@@ -23,9 +23,8 @@ public class TcpOrderClient implements AutoCloseable {
         System.out.println("Connected to Exchange at " + host + ":" + port);
     }
 
-    public void sendOrder(long orderId, long qty, long price, boolean isBuy) throws IOException {
+    public void sendOrder(long qty, long price, boolean isBuy) throws IOException {
         buffer.clear();
-        buffer.putLong(orderId);
         buffer.putLong(qty);
         buffer.putLong(price);
         buffer.put((byte) (isBuy ? 1 : 0));
@@ -87,13 +86,12 @@ public class TcpOrderClient implements AutoCloseable {
                         // Expected format: SEND_ORDER,orderId,qty,price,isBuy
                         String[] parts = line.split(",");
                         if ("SEND_ORDER".equals(parts[0]) && parts.length == 5) {
-                            long id = Long.parseLong(parts[1]);
-                            long qty = Long.parseLong(parts[2]);
-                            long price = Long.parseLong(parts[3]);
-                            boolean isBuy = Boolean.parseBoolean(parts[4]);
+                            long qty = Long.parseLong(parts[1]);
+                            long price = Long.parseLong(parts[2]);
+                            boolean isBuy = Boolean.parseBoolean(parts[3]);
 
-                            sendOrder(id, qty, price, isBuy);
-                            System.out.println("Sent order: " + id);
+                            sendOrder(qty, price, isBuy);
+                            System.out.println("Sent order");
                         }
                     } catch (Exception e) {
                         System.err.println("Failed to parse command: " + line + " | Error: " + e.getMessage());
