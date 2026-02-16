@@ -105,30 +105,39 @@ public class TcpOrderClient implements AutoCloseable {
         Thread pingerThread = new Thread(() -> {
             ByteBuffer ping = ByteBuffer.allocate(1);
             ping.put((byte) 1);
-            
-            // Buffer to send 8-byte price back to Electron
+        
             byte[] outboundPrice = new byte[8];
             ByteBuffer outboundBuffer = ByteBuffer.wrap(outboundPrice);
 
             while (!Thread.currentThread().isInterrupted()) {
                 try {
+                    ping.clear();
+                    ping.put((byte) 1);
                     ping.flip();
-                    priceClient.write(ping);
-
-                    priceBuffer.clear();
-                    int read = priceClient.read(priceBuffer);
-                    if (read == 8) {
-                        priceBuffer.flip();
-                        long lastPrice = priceBuffer.getLong();
-                        
-                        // Write the 8-byte long directly to System.out for Electron
-                        outboundBuffer.clear();
-                        outboundBuffer.putLong(lastPrice);
-                        System.out.write(outboundPrice);
-                        System.out.flush(); 
+                    
+                    // Ensure the ping is sent
+                    while(ping.hasRemaining()) {
+                        priceClient.write(ping);
                     }
 
-                    Thread.sleep(1000); // Ping interval
+                    priceBuffer.clear();
+                    // Blocking read for exactly 8 bytes
+                    int totalRead = 0;
+                    while (totalRead < 8) {
+                        int read = priceClient.read(priceBuffer);
+                        if (read == -1) throw new IOException("Price server closed connection");
+                        totalRead += read;
+                    }
+                    
+                    priceBuffer.flip();
+                    long lastPrice = priceBuffer.getLong();
+                
+                    outboundBuffer.clear();
+                    outboundBuffer.putLong(lastPrice);
+                    System.out.write(outboundPrice);
+                    System.out.flush(); 
+
+                    Thread.sleep(1000);
                 } catch (IOException | InterruptedException e) {
                     System.err.println("Price pinger error: " + e.getMessage());
                     break;

@@ -104,7 +104,10 @@ public class TcpOrderIngress implements Runnable{
         if (client != null) {
             client.configureBlocking(false);
 
-            client.register(selector, SelectionKey.OP_READ);
+            // Attach the port to the key so handleRead knows which logic to use
+            int port = ((InetSocketAddress)server.getLocalAddress()).getPort();
+            client.register(selector, SelectionKey.OP_READ, port);
+
             if (server == priceServerChannel) {
                 System.out.println("Price Query Client connected: " + client.getRemoteAddress());
             } else {
@@ -115,9 +118,10 @@ public class TcpOrderIngress implements Runnable{
 
     private void handleRead(SelectionKey key) throws IOException {
         SocketChannel client = (SocketChannel) key.channel();
+        Integer port = (Integer) key.attachment();
 
-        // Determine if this is a price query or an order
-        if (client.getLocalAddress().toString().contains(String.valueOf(pricePort))) {
+        // Use the attachment to route the request
+        if (port != null && port == pricePort) {
             handlePriceRequest(client);
         } else {
             handleOrderRequest(client);
@@ -137,6 +141,7 @@ public class TcpOrderIngress implements Runnable{
             // User sent a ping, respond with the latest price
             priceOutputBuffer.clear();
             priceOutputBuffer.putLong(priceMap.lastProcessedPrice);
+            System.out.println("Last Processed Price: " + priceMap.lastProcessedPrice);
             priceOutputBuffer.flip();
             client.write(priceOutputBuffer);
         }
