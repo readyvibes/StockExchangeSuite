@@ -73,8 +73,8 @@ public class TcpOrderIngress implements Runnable{
     public void run() {
         while (!Thread.currentThread().isInterrupted()) {
             try {
-                selector.select();
-                Iterator<SelectionKey> keys = selector.selectedKeys().iterator();
+                selector.select(); // Waits for a channel to be ready for I/O operation
+                Iterator<SelectionKey> keys = selector.selectedKeys().iterator(); // Returns a list of channel keys that are ready for I/O
 
                 while (keys.hasNext()) {
                     SelectionKey key = keys.next();
@@ -95,6 +95,7 @@ public class TcpOrderIngress implements Runnable{
 
 
     private void handleAccept(SelectionKey selectionKey) throws IOException {
+        // This identifies which server socket received a new connection attempt and prepares it so the program can officially accept that connection
         ServerSocketChannel server = (ServerSocketChannel) selectionKey.channel();
         SocketChannel client = server.accept();
 
@@ -145,7 +146,7 @@ public class TcpOrderIngress implements Runnable{
     }
 
     private void handleOrderRequest(SocketChannel client) throws IOException {
-        int bytesRead = client.read(buffer);
+        int bytesRead = client.read(buffer); // Stores and reads the ByteBuffer from sendOrder in TcpOrderClient
 
         if (bytesRead == -1) {
             client.close();

@@ -103,11 +103,11 @@ public class TcpOrderClient implements AutoCloseable {
 
     public void startPricePinger() {
         Thread pingerThread = new Thread(() -> {
-            ByteBuffer ping = ByteBuffer.allocate(1);
-            ping.put((byte) 1);
+            ByteBuffer ping = ByteBuffer.allocate(1); // Configure to send To Server To Ping
+            ping.put((byte) 1); // Send To Server To Ping
         
-            byte[] outboundPrice = new byte[8];
-            ByteBuffer outboundBuffer = ByteBuffer.wrap(outboundPrice);
+            byte[] outboundPrice = new byte[8]; // Configure Handle Reading Response
+            ByteBuffer outboundBuffer = ByteBuffer.wrap(outboundPrice); // Configure Handle Reading Response
 
             while (!Thread.currentThread().isInterrupted()) {
                 try {
@@ -117,10 +117,10 @@ public class TcpOrderClient implements AutoCloseable {
                     
                     // Ensure the ping is sent
                     while(ping.hasRemaining()) {
-                        priceClient.write(ping);
+                        priceClient.write(ping); // Send single byte to server
                     }
 
-                    priceBuffer.clear();
+                    priceBuffer.clear(); // Clear buffer that holds response of server
                     // Blocking read for exactly 8 bytes
                     int totalRead = 0;
                     while (totalRead < 8) {
@@ -129,12 +129,12 @@ public class TcpOrderClient implements AutoCloseable {
                         totalRead += read;
                     }
                     
-                    priceBuffer.flip();
+                    priceBuffer.flip(); // switch a ByteBuffer from writing mode to reading mode
                     long lastPrice = priceBuffer.getLong();
                 
                     outboundBuffer.clear();
                     outboundBuffer.putLong(lastPrice);
-                    System.out.write(outboundPrice);
+                    System.out.write(outboundPrice); // Send to Electron App
                     System.out.flush(); 
 
                     Thread.sleep(1000);
