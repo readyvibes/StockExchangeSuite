@@ -8,6 +8,11 @@ This suite is designed for low-latency execution, utilizing a multi-producer rin
   <img src="./docs/TCP Order Ingress Workflow.png" alt="Architecture Diagram" width="900">
 </p>
 
+## TCP Order Client to TCP Ingress Workflow
+<p>
+  <img src="./docs/TCP Order Client to TCP Ingress Workflow.png" alt="Architecture Diagram" width="900">
+</p>
+
 System Architecture
 The platform follows a modular architecture designed to isolate network handling from core matching logic:
 1. Network Ingress: A non-blocking Java NIO Selector manages concurrent client connections on port 8080, deserializing raw binary streams into order objects.
