@@ -79,7 +79,7 @@ public class TcpOrderClient implements AutoCloseable {
                     int bytesRead = 0;
                     // Ensure we read a full 17-byte message
                     while (bytesRead < 17) {
-                        int result = in.read(messageBuffer, bytesRead, 17 - bytesRead);
+                        int result = in.read(messageBuffer, bytesRead, 17 - bytesRead); // Read from electron output System.in
                         if (result == -1) return; // Stream closed
                         bytesRead += result;
                     }
