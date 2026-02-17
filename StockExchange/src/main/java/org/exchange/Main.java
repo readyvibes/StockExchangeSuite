@@ -9,20 +9,8 @@ import java.util.concurrent.atomic.LongAdder;
 
 public class Main {
     // High-performance counter for metrics
-    private static final LongAdder processedCount = new LongAdder();
-
     public static void main(String[] args) {
-        MultiProducerRingBuffer ringBuffer = new MultiProducerRingBuffer(1);
-        PriceMap matchingEngine = new PriceMap(processedCount);
-        ExchangeMonitor exchangeMonitor = new ExchangeMonitor();
-
-        Thread monitorThread = new Thread(exchangeMonitor.monitor(processedCount));
-        monitorThread.start();
-
-        Thread matchingEngineThread = new Thread(matchingEngine.run(ringBuffer));
-        matchingEngineThread.start();
-
-        TcpOrderIngress tcpOrderIngress = new TcpOrderIngress(8080, ringBuffer);
+        TcpOrderIngress tcpOrderIngress = new TcpOrderIngress();
         tcpOrderIngress.start();
     }
 }

@@ -1,28 +1,34 @@
 package org.exchange.client;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.util.Scanner;
 
 public class TcpOrderClient implements AutoCloseable {
     private final String host;
-    private final int port;
-    private SocketChannel client;
+    private final int orderPort;
+    private final int pricePort;
+    private SocketChannel orderClient;
+    private SocketChannel priceClient;
     private final ByteBuffer buffer = ByteBuffer.allocateDirect(1024);
+    private final ByteBuffer priceBuffer = ByteBuffer.allocateDirect(8);
 
-    public TcpOrderClient(String host, int port) {
+    public TcpOrderClient(String host, int orderPort, int pricePort) {
         this.host = host;
-        this.port = port;
+        this.orderPort = orderPort;
+        this.pricePort = pricePort;
     }
 
     public void connect() throws IOException {
-        client = SocketChannel.open(new InetSocketAddress(host, port));
-        client.configureBlocking(true);
-        System.out.println("Connected to Exchange at " + host + ":" + port);
+        orderClient = SocketChannel.open(new InetSocketAddress(host, orderPort));
+        orderClient.configureBlocking(true);
+
+        priceClient = SocketChannel.open(new InetSocketAddress(host, pricePort));
+        priceClient.configureBlocking(true);
+
+        System.out.println("Connected to Order Ingress at " + host + ":" + orderPort);
+        System.out.println("Connected to Price Ingress at " + host + ":" + pricePort);
     }
 
     public void sendOrder(long qty, long price, boolean isBuy) throws IOException {
@@ -33,41 +39,27 @@ public class TcpOrderClient implements AutoCloseable {
         buffer.flip();
 
         while (buffer.hasRemaining()) {
-            client.write(buffer);
-        }
-    }
-
-    public void sendBatch(int count) throws IOException {
-        buffer.clear();
-        for (int i = 0; i < count; i++) {
-            if (buffer.remaining() < 25) {
-                buffer.flip();
-                client.write(buffer);
-                buffer.clear();
-            }
-            buffer.putLong(System.nanoTime()); // Using time as dummy ID
-            buffer.putLong(100);               // Qty
-            buffer.putLong(500);               // Price
-            buffer.put((byte) 1);              // Buy
-        }
-        buffer.flip();
-        while (buffer.hasRemaining()) {
-            client.write(buffer);
+            orderClient.write(buffer);
         }
     }
 
     @Override
     public void close() throws IOException {
-        if (client != null) {
-            client.close();
+        if (orderClient != null) {
+            orderClient.close();
+        }
+
+        if (priceClient != null) {
+            priceClient.close();
         }
     }
 
     public static void main(String[] args) {
-        try (TcpOrderClient apiClient = new TcpOrderClient("localhost", 8080)) {
+        try (TcpOrderClient apiClient = new TcpOrderClient("localhost", 9090, 9091)) {
             apiClient.connect();
             // Start listening for commands from Electron/Stdin
-            apiClient.startCommandListener();
+            apiClient.startOrderListener();
+            apiClient.startPricePinger();
 
             // Keep the main thread alive while the listener thread runs
             Thread.currentThread().join();
@@ -76,7 +68,7 @@ public class TcpOrderClient implements AutoCloseable {
         }
     }
 
-    public void startCommandListener() {
+    public void startOrderListener() {
         Thread listenerThread = new Thread(() -> {
             System.out.println("Java Client: Listening for BINARY commands on stdin...");
             try {
@@ -87,7 +79,7 @@ public class TcpOrderClient implements AutoCloseable {
                     int bytesRead = 0;
                     // Ensure we read a full 17-byte message
                     while (bytesRead < 17) {
-                        int result = in.read(messageBuffer, bytesRead, 17 - bytesRead);
+                        int result = in.read(messageBuffer, bytesRead, 17 - bytesRead); // Read from electron output System.in
                         if (result == -1) return; // Stream closed
                         bytesRead += result;
                     }
@@ -107,5 +99,52 @@ public class TcpOrderClient implements AutoCloseable {
 
         listenerThread.setDaemon(true);
         listenerThread.start();
+    }
+
+    public void startPricePinger() {
+        Thread pingerThread = new Thread(() -> {
+            ByteBuffer ping = ByteBuffer.allocate(1); // Configure to send To Server To Ping
+            ping.put((byte) 1); // Send To Server To Ping
+        
+            byte[] outboundPrice = new byte[8]; // Configure Handle Reading Response
+            ByteBuffer outboundBuffer = ByteBuffer.wrap(outboundPrice); // Configure Handle Reading Response
+
+            while (!Thread.currentThread().isInterrupted()) {
+                try {
+                    ping.clear();
+                    ping.put((byte) 1);
+                    ping.flip();
+                    
+                    // Ensure the ping is sent
+                    while(ping.hasRemaining()) {
+                        priceClient.write(ping); // Send single byte to server
+                    }
+
+                    priceBuffer.clear(); // Clear buffer that holds response of server
+                    // Blocking read for exactly 8 bytes
+                    int totalRead = 0;
+                    while (totalRead < 8) {
+                        int read = priceClient.read(priceBuffer);
+                        if (read == -1) throw new IOException("Price server closed connection");
+                        totalRead += read;
+                    }
+                    
+                    priceBuffer.flip(); // switch a ByteBuffer from writing mode to reading mode
+                    long lastPrice = priceBuffer.getLong();
+                
+                    outboundBuffer.clear();
+                    outboundBuffer.putLong(lastPrice);
+                    System.out.write(outboundPrice); // Send to Electron App
+                    System.out.flush(); 
+
+                    Thread.sleep(1000);
+                } catch (IOException | InterruptedException e) {
+                    System.err.println("Price pinger error: " + e.getMessage());
+                    break;
+                }
+            }
+        }, "PricePinger");
+        pingerThread.setDaemon(true);
+        pingerThread.start();
     }
 }
